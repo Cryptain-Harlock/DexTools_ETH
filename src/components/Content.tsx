@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { LoadingSpinner } from "./BeatLoader";
+import {
+  Box,
+  Flex,
+  Image,
+  TableContainer,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+} from "@chakra-ui/react";
 
 export default function Content() {
   const [tokens, setTokens] = useState([]);
@@ -35,65 +47,58 @@ export default function Content() {
   }, []);
 
   return (
-    <main className="flex-1 p-6">
-      {/* <Add />
-        <Delete /> */}
-      <div className="overflow-x-auto">
-        {loading ? (
-          <LoadingSpinner />
-        ) : (
-          <table className="min-w-full shadow">
-            <thead>
-              <tr className="bg-[#142028] text-sm border border-[#142028] rounded-md">
-                <th className="py-3 px-6 text-left">No</th>
-                <th className="py-3 px-6 text-left">Token</th>
-                <th className="py-3 px-6 text-left">Symbol</th>
-                <th className="py-3 px-6 text-left">Price (USD)</th>
-                <th className="py-3 px-6 text-left">24h Change (%)</th>
-                <th className="py-3 px-6 text-left">Volume (24h)</th>
-                <th className="py-3 px-6 text-left">Market Cap</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((token: any, index) => (
-                <tr
-                  key={token.id}
-                  className="border-b border-solid border-[#142028] hover:bg-[#142028]"
-                >
-                  <td className="py-3 px-6">{index + 1}</td>
-                  <td className="py-3 px-6 flex items-center">
-                    <img
-                      src={token.image}
-                      alt={token.name}
-                      className="w-6 h-6 rounded-full mr-2"
-                    />
-                    {token.name}
-                  </td>
-                  <td className="py-3 px-6">{token.symbol.toUpperCase()}</td>
-                  <td className="py-3 px-6">
-                    ${token.current_price.toFixed(2)}
-                  </td>
-                  <td
-                    className={`py-3 px-6 ${
-                      token.price_change_percentage_24h < 0
-                        ? "text-red-500"
-                        : "text-green-500"
-                    }`}
-                  >
-                    {token.price_change_percentage_24h?.toFixed(2)}%
-                  </td>
-                  <td className="py-3 px-6">
-                    ${token.total_volume.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-6">
-                    ${token.market_cap.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </main>
+    <Box w="100%" px={{ base: 8, md: 20 }} mt={120} mb={20}>
+      <Flex
+        align="center"
+        justify="center"
+        px={4}
+        textAlign="center"
+        flexDirection="column"
+      >
+        <TableContainer>
+          <Table>
+            <Thead>
+              <Tr>
+                <Th>No</Th>
+                <Th>Token</Th>
+                <Th>Symbol</Th>
+                <Th>Price (USD)</Th>
+                <Th>24h Change (%)</Th>
+                <Th>Volume (24h)</Th>
+                <Th>Market Cap</Th>
+              </Tr>
+            </Thead>
+            {loading ? (
+              <LoadingSpinner />
+            ) : (
+              <Tbody>
+                {tokens.map((token: any, index) => (
+                  <Tr key={token.id}>
+                    <Td>{index + 1}</Td>
+                    <Td>
+                      <Image src={token.image} alt={token.name} />
+                      {token.name}
+                    </Td>
+                    <Td>{token.symbol.toUpperCase()}</Td>
+                    <Td>${token.current_price.toFixed(2)}</Td>
+                    <Td
+                      color={
+                        token.price_change_percentage_24h < 0
+                          ? "red.500"
+                          : "green.500"
+                      }
+                    >
+                      {token.price_change_percentage_24h?.toFixed(2)}%
+                    </Td>
+                    <Td>${token.total_volume.toLocaleString()}</Td>
+                    <Td>${token.market_cap.toLocaleString()}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            )}
+          </Table>
+        </TableContainer>
+      </Flex>
+    </Box>
   );
 }
