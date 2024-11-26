@@ -3,11 +3,11 @@ import { useParams } from "react-router-dom";
 import { fetchTokenTransfers } from "../services/etherscan"; // Make sure to adjust the import based on your file structure
 import { LoadingSpinner } from "../components/BeatLoader";
 
-function TakeInfo() {
+export default function TokenInfo() {
   const { tokenAddress } = useParams();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
@@ -18,7 +18,10 @@ function TakeInfo() {
             amount: tx.value / Math.pow(10, tx.tokenDecimal),
             usdEquivalent: calculateUSDEquivalent(tx),
             priceAtTransaction: calculatePrice(tx),
-            type: tx.to.toLowerCase() === tokenAddress?.toLowerCase() ? "Buy" : "Sell",
+            type:
+              tx.to.toLowerCase() === tokenAddress?.toLowerCase()
+                ? "Buy"
+                : "Sell",
             wallet: tx.from,
             pnl: calculatePNL(tx),
           }));
@@ -69,12 +72,27 @@ function TakeInfo() {
               </thead>
               <tbody>
                 {transactions.map((tx: any, index) => (
-                  <tr key={index} className="border-b border-solid border-[#142028] hover:bg-[#142028]" style={{ color: tx.type === "Buy" ? "#cdffe7" : "#ffacb1" }}>
+                  <tr
+                    key={index}
+                    className="border-b border-solid border-[#142028] hover:bg-[#142028]"
+                    style={{ color: tx.type === "Buy" ? "#cdffe7" : "#ffacb1" }}
+                  >
                     <td className="py-3 px-6">{tx.date}</td>
                     <td className="py-3 px-6">{tx.amount}</td>
-                    <td className="py-3 px-6">${(tx.usdEquivalent || 0).toFixed(2)}</td>
-                    <td className="py-3 px-6">${(tx.priceAtTransaction || 0).toFixed(2)}</td>
-                    <td className="py-3 px-6" style={{ color: tx.type === "Buy" ? "#ea3943" : "#17c671" }}>{tx.type}</td>
+                    <td className="py-3 px-6">
+                      ${(tx.usdEquivalent || 0).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-6">
+                      ${(tx.priceAtTransaction || 0).toFixed(2)}
+                    </td>
+                    <td
+                      className="py-3 px-6"
+                      style={{
+                        color: tx.type === "Buy" ? "#ea3943" : "#17c671",
+                      }}
+                    >
+                      {tx.type}
+                    </td>
                     <td className="py-3 px-6">{tx.wallet}</td>
                     <td className="py-3 px-6">{tx.pnl.toFixed(2)}</td>
                   </tr>
@@ -87,5 +105,3 @@ function TakeInfo() {
     </main>
   );
 }
-
-export default TakeInfo;

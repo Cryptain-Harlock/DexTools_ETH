@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
-import { Box, Flex, Link, Button, IconButton, Image } from "@chakra-ui/react";
-import { ChevronDownIcon } from "@chakra-ui/icons";
-import { HamburgerIcon } from "@chakra-ui/icons";
-import { NavLink } from "react-router-dom";
+import {
+  Box,
+  Flex,
+  Link,
+  Button,
+  Input,
+  InputGroup,
+  InputLeftAddon,
+} from "@chakra-ui/react";
+import { SearchIcon } from "@chakra-ui/icons";
+import { NavLink, useNavigate } from "react-router-dom";
 
 export default function Header() {
   const [showBorder, setShowBorder] = useState(false);
@@ -15,6 +22,19 @@ export default function Header() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const [tokenAddress, setTokenAddress] = useState("");
+  const navigate = useNavigate();
+
+  const handleInputChange = (e: any) => {
+    setTokenAddress(e.target.value);
+  };
+
+  const handleKeyPress = (e: any) => {
+    if (e.key === "Enter" && tokenAddress) {
+      navigate(`/token/${tokenAddress}`);
+    }
+  };
 
   return (
     <Box
@@ -33,9 +53,20 @@ export default function Header() {
         <Link as={NavLink} to="/" mx={{ base: "auto", md: 0 }}>
           Token Detector
         </Link>
-
+        <InputGroup maxW={500}>
+          <InputLeftAddon>
+            <SearchIcon />
+          </InputLeftAddon>
+          <Input
+            variant="outline"
+            value={tokenAddress}
+            onChange={handleInputChange}
+            onKeyPress={handleKeyPress}
+            placeholder="Enter token address..."
+          />
+        </InputGroup>
         <Flex align="center" display={{ base: "none", md: "flex" }}>
-          {["Modul1", "Module2", "Module3", "Module4"].map((label, index) => (
+          {["Module1", "Module2", "Module3", "Module4"].map((label, index) => (
             <Button
               key={index}
               as={NavLink}
