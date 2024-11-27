@@ -1,4 +1,3 @@
-export { Alchemy, Network } from "alchemy-sdk";
 import { Alchemy, Network } from "alchemy-sdk";
 import axios from "axios";
 

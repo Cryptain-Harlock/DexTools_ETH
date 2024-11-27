@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Token Tracker</title>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      h1,
+      h2 {
+        color: #333;
+      }
+      #app {
+        background-color: #fff;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      #search-form {
+        margin-bottom: 20px;
+      }
+      #token-info,
+      #transaction-info {
+        margin-bottom: 20px;
+        background-color: #f8f8f8;
+        padding: 15px;
+        border-radius: 5px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th,
+      td {
+        padding: 12px;
+        border: 1px solid #ddd;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+      tr:nth-child(even) {
+        background-color: #f8f8f8;
+      }
+      #logs {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f8f8f8;
+        border: 1px solid #ddd;
+        height: 200px;
+        overflow-y: auto;
+      }
+      .log-entry {
+        margin-bottom: 5px;
+      }
+      .error {
+        color: red;
+      }
+      .warning {
+        color: orange;
+      }
+      .success {
+        color: green;
+      }
+      .button {
+        background-color: #4caf50;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 5px;
+      }
+      input[type="text"] {
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        width: 300px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app">
+      <h1>CLAUDE Suivi des Transactions de Token v1.1</h1>
+      <div id="search-form">
+        <input
+          type="text"
+          id="contract-address"
+          placeholder="Adresse du contrat"
+        />
+        <button id="search-button" class="button">Rechercher</button>
+      </div>
+      <div id="token-info">
+        <div id="token_name"></div>
+        <div id="token_price"></div>
+        <div id="total_supply"></div>
+        <div id="decimals"></div>
+        <div id="m5"></div>
+        <div id="h1"></div>
+        <div id="h6"></div>
+        <div id="h24"></div>
+        <div id="fdv"></div>
+        <div id="liquidity"></div>
+        <div id="holders"></div>
+        <div id="created-at"></div>
+      </div>
+      <div id="transaction-info"></div>
+      <table id="transactions-table">
+        <thead>
+          <tr>
+            <th id="date">Date</th>
+            <th id="date">Type</th>
+            <th id="price_usd">Prix USD</th>
+            <th id="total">Total ($)</th>
+            <th id="price_eth">Prix ETH</th>
+            <th id="amount_token">Quantité</th>
+            <th id="amount_token_weth">Quantité WETH</th>
+            <th id="maker">Adresse</th>
+            <th id="hash">Hash</th>
+          </tr>
+        </thead>
+        <tbody id="transactions-body"></tbody>
+      </table>
+    </div>
+    <script type="module">
+      function resetUI() {
+        // Clear all relevant HTML elements
+        document.getElementById("decimals").innerHTML = "";
+        document.getElementById("total_supply").innerHTML = "";
+        document.getElementById("liquidity").innerHTML = "";
+        document.getElementById("amount_token").innerHTML = "";
+        document.getElementById("token_name").innerHTML = "";
+        document.getElementById("token_price").innerHTML = "";
+        document.getElementById("created-at").innerHTML = "";
+        document.getElementById("holders").innerHTML = "";
+
+        // Clear the transactions table
+        const transactionsBody = document.getElementById("transactions-body");
+        transactionsBody.innerHTML = "";
+      }
+
+      import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.min.js";
+      const API_URL = "https://api.geckoterminal.com/api/v2";
+      const API_KEY =
+        "ory_at_9cOdZ9PAuHq2fAJEx8zTVDmCe6QpXMdSEBE31hrlt4Q.3lCezjTgQDuCtTFKLts0850uchYMno5Ny4Ajs5SzhTU";
+
+      const provider = new ethers.JsonRpcProvider(
+        `https://eth-mainnet.g.alchemy.com/v2/lBsnumlNVsOQUAoLYFwEFlnLkqYmkISK`
+      );
+
+      const transferEventTopic =
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+      let contractAddress = "";
+
+      var decimals = 0;
+      const searchButton = document.getElementById("search-button");
+      searchButton.addEventListener("click", searchFunction);
+
+      function isValidEVMAddress(address) {
+        return /^0x[a-fA-F0-9]{40}$/.test(address);
+      }
+
+      function getFormattedDate() {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function formatDateTime(input) {
+        const date = new Date(input);
+        return new Intl.DateTimeFormat("fr-FR", {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(date);
+      }
+
+      function formatNumber(num) {
+        const numberStr = num.toString();
+        const match = numberStr.match(/^0\.0(0{4,})(\d+)/);
+        if (match) {
+          const zeroCount = match[1].length;
+          const significantDigits = match[2];
+          return `0,0<sub>${zeroCount + 1}</sub>${significantDigits}`;
+        }
+        return numberStr.replace(".", ",");
+      }
+
+      function formatNumberWithPrefix(num) {
+        if (num === 0) return "0";
+        const units = [
+          { value: 1e12, symbol: "T" },
+          { value: 1e9, symbol: "Md" },
+          { value: 1e6, symbol: "M" },
+          { value: 1e3, symbol: "k" },
+        ];
+        for (const { value, symbol } of units) {
+          if (Math.abs(num) >= value) {
+            return (num / value).toFixed(2).replace(".", ",") + symbol;
+          }
+        }
+        return num.toString().replace(".", ",");
+      }
+
+      function displayTradeData(data) {
+        const transactionsBody = document.getElementById("transactions-body");
+        transactionsBody.innerHTML = "";
+        data.forEach((trade) => {
+          const attributes = trade.attributes;
+          const row = document.createElement("tr");
+          const typeColor =
+            attributes.kind === "sell"
+              ? "color:red"
+              : attributes.kind === "buy"
+              ? "color:green"
+              : attributes.kind === "remove"
+              ? "color:gray" // French for "remove"
+              : attributes.kind === "add"
+              ? "color:cyan" // French for "add"
+              : "Inconnu";
+          row.innerHTML = `
+            <td>${formatDateTime(new Date(attributes.block_timestamp))}</td>
+            <td style=${typeColor}>${attributes?.kind}</td>
+            <td>${
+              attributes.kind === "add"
+                ? "-"
+                : attributes.kind === "buy"
+                ? formatNumber(Number(attributes.price_to_in_usd).toFixed(12))
+                : formatNumber(Number(attributes.price_from_in_usd).toFixed(12))
+            }</td>
+            <td>${
+              attributes.kind === "add"
+                ? "-"
+                : Number(attributes.volume_in_usd).toFixed(2).replace(".", ",")
+            } $</td>
+            <td>${
+              attributes.kind === "add"
+                ? "-"
+                : attributes.kind === "buy"
+                ? formatNumber(
+                    Number(attributes.price_to_in_currency_token).toFixed(13)
+                  )
+                : formatNumber(
+                    Number(attributes.price_from_in_currency_token).toFixed(13)
+                  )
+            }</td>
+            <td>${(attributes.kind === "buy"
+              ? Number(attributes.to_token_amount)
+              : Number(attributes.from_token_amount)
+            ).toLocaleString("fr-FR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}</td>
+            <td>${
+              attributes.kind === "buy"
+                ? formatNumber(Number(attributes.from_token_amount).toFixed(4))
+                : formatNumber(Number(attributes.to_token_amount).toFixed(4))
+            }</td>
+            <td>${attributes.tx_from_address}</td>
+            <td><a href="https://etherscan.io/tx/${
+              attributes.tx_hash
+            }" target="_blank">${attributes.tx_hash.substring(
+            0,
+            6
+          )}...${attributes.tx_hash.substring(62)}</a></td>
+          `;
+          transactionsBody.appendChild(row);
+        });
+      }
+
+      function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function fetchWithRetry(fetchFunction, maxRetries = 3) {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            return await fetchFunction();
+          } catch (error) {
+            if (error.code === 429) {
+              console.warn("Rate limit exceeded, retrying...");
+              await delay(2000);
+            } else {
+              throw error;
+            }
+          }
+        }
+        throw new Error("Max retries reached");
+      }
+
+      async function fetchExtraEvents(tokenAddress) {
+        const filter = {
+          address: tokenAddress,
+          topics: [transferEventTopic],
+          fromBlock: 0,
+          toBlock: "latest",
+        };
+
+        const processedTransactions = new Set();
+        const eventDataMap = new Map();
+
+        try {
+          const logs = await provider.getLogs(filter);
+
+          await Promise.all(
+            logs.map(async (log, index) => {
+              await delay(100);
+              // Skip if transaction has already been processed
+              if (processedTransactions.has(log.transactionHash)) return;
+
+              // Fetch transaction and receipt in parallel
+              const [tx, receipt, block] = await Promise.all([
+                provider.getTransaction(log.transactionHash),
+                provider.getTransactionReceipt(log.transactionHash),
+                provider.getBlock(log.blockNumber),
+              ]);
+
+              const timestamp = new Date(block.timestamp * 1000);
+
+              // Filter relevant transfer logs within this transaction receipt
+              const transferLogs = receipt.logs.filter(
+                (log) => log.topics[0] === transferEventTopic
+              );
+
+              transferLogs.forEach((transferLog) => {
+                const fromAddress = transferLog.topics[1];
+                const toAddress = transferLog.topics[2];
+                let eventType = "";
+
+                if (
+                  fromAddress === ethers.ZeroHash &&
+                  toAddress !== ethers.ZeroHash
+                ) {
+                  eventType = "add";
+                } else if (
+                  fromAddress !== ethers.ZeroHash &&
+                  toAddress === ethers.ZeroHash
+                ) {
+                  eventType = "remove";
+                }
+
+                if (eventType) {
+                  const eventData = {
+                    attributes: {
+                      kind: eventType,
+                      block_timestamp: timestamp,
+                      tx_from_address: tx.from,
+                      tx_hash: tx.hash,
+                    },
+                  };
+
+                  if (!eventDataMap.has(tx.hash)) {
+                    eventDataMap.set(tx.hash, eventData);
+                  }
+                }
+
+                processedTransactions.add(log.transactionHash);
+              });
+            })
+          );
+
+          const eventData = Array.from(eventDataMap.values()).sort(
+            (a, b) =>
+              new Date(a.attributes.block_timestamp) -
+              new Date(b.attributes.block_timestamp)
+          );
+          return eventData;
+        } catch (error) {
+          console.error("Error fetching logs:", error);
+          return [];
+        }
+      }
+
+      async function searchFunction() {
+        resetUI();
+
+        contractAddress = document
+          .getElementById("contract-address")
+          .value.toLowerCase();
+        if (contractAddress === "")
+          alert("Veuillez entrer l'adresse du contrat !");
+        if (!isValidEVMAddress(contractAddress))
+          alert("Veuillez entrer une adresse de contrat valide !");
+
+        try {
+          const resTokenInfo = await fetch(
+            `${API_URL}/networks/eth/tokens/${contractAddress}`
+          );
+          if (!resTokenInfo.ok)
+            throw new Error(`Erreur HTTP ! statut : ${resTokenInfo.status}`);
+
+          const resInfo = await resTokenInfo.json();
+          if (resInfo.error)
+            throw new Error(`Erreur API : ${resInfo.error.message}`);
+
+          decimals = resInfo.data.attributes.decimals;
+
+          document.getElementById(
+            "decimals"
+          ).innerHTML = `<strong>Décimales : ${decimals}</strong>`;
+          document.getElementById(
+            "total_supply"
+          ).innerHTML = `<strong>Offre Totale : ${formatNumberWithPrefix(
+            Number(resInfo.data.attributes.total_supply) /
+              Math.pow(10, decimals)
+          )}</strong>`;
+          document.getElementById(
+            "liquidity"
+          ).innerHTML = `<strong>Liquidité : ${formatNumberWithPrefix(
+            Number(resInfo.data.attributes.total_reserve_in_usd) * 2
+          )} $</strong>`;
+          document.getElementById(
+            "amount_token"
+          ).innerHTML = `<strong>Quantité ${resInfo.data.attributes.symbol}</strong>`;
+          document.getElementById(
+            "token_name"
+          ).innerHTML = `<strong>Nom du Token : ${resInfo.data.attributes.name}</strong>`;
+
+          const resPool = await fetch(
+            `${API_URL}/networks/eth/tokens/${contractAddress}/pools`
+          );
+          if (!resPool.ok)
+            throw new Error(`Erreur HTTP ! statut : ${resPool.status}`);
+
+          const res = await resPool.json();
+          if (res.error) throw new Error(`Erreur API : ${res.error.message}`);
+
+          const {
+            token_price_usd,
+            address,
+            pool_created_at,
+            price_change_percentage,
+          } = res.data[0].attributes;
+
+          document.getElementById(
+            "token_price"
+          ).innerHTML = `<strong>Prix du Token : ${formatNumber(
+            Number(token_price_usd).toFixed(12)
+          )} $</strong>`;
+
+          document.getElementById(
+            "created-at"
+          ).innerHTML = `<strong>Créé le : ${formatDateTime(
+            new Date(pool_created_at)
+          )}</strong>`;
+
+          const resTransactions = await fetch(
+            `https://api.geckoterminal.com/api/v2/networks/eth/pools/${address}/trades`
+          );
+          if (!resTransactions.ok)
+            throw new Error(`Erreur HTTP ! statut : ${resTransactions.status}`);
+
+          const resTrx = await resTransactions.json();
+          if (resTrx.error)
+            throw new Error(`Erreur API : ${resTrx.error.message}`);
+
+          const mintAndBurnEvents = await fetchExtraEvents(contractAddress);
+          const combinedData = [...resTrx.data, ...mintAndBurnEvents];
+
+          combinedData.sort(
+            (a, b) =>
+              new Date(b.attributes.block_timestamp) -
+              new Date(a.attributes.block_timestamp)
+          );
+
+          displayTradeData(combinedData);
+
+          const today = getFormattedDate();
+          const holdQuery = JSON.stringify({
+            query: `{
+                EVM(dataset: archive, network: eth) {
+                    TokenHolders(
+                        date: "${today.toString()}"
+                        tokenSmartContract: "${contractAddress}"
+                        where: { Balance: { Amount: { gt: "0" } } }
+                    ) {
+                        uniq(of: Holder_Address)
+                    }
+                }
+            }`,
+          });
+
+          const resHoders = await fetch(
+            "https://streaming.bitquery.io/graphql",
+            {
+              method: "post",
+              body: holdQuery,
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${API_KEY}`,
+              },
+            }
+          );
+
+          const holders = await resHoders.json();
+          document.getElementById(
+            "holders"
+          ).innerHTML = `<strong>Détenteurs : ${holders.data.EVM.TokenHolders[0].uniq}</strong>`;
+        } catch (err) {
+          console.error(err);
+          alert("Une erreur s'est produite lors de la recherche du token");
+        }
+      }
+    </script>
+  </body>
+</html>
