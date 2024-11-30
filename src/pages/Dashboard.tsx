@@ -1,16 +1,10 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import { ethers } from "ethers";
 import {
   Box,
-  Heading,
-  Text,
   Flex,
-  Button,
-  VStack,
-  Image,
-  Divider,
-  TableContainer,
   Table,
+  TableContainer,
   Thead,
   Tbody,
   Tr,
@@ -19,31 +13,92 @@ import {
 } from "@chakra-ui/react";
 import { LoadingSpinner } from "../components/BeatLoader";
 
+type TokenType = {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+};
+
 export function Dashboard() {
-  const [tokens, setTokens] = useState([]);
+  const [tokens, setTokens] = useState<TokenType[]>([]); // Explicitly define the type
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchTokens = async () => {
+      setLoading(true);
+
       try {
-        const response = await axios.get(
-          "https://api.coingecko.com/api/v3/coins/markets",
-          {
-            params: {
-              vs_currency: "usd",
-              category: "ethereum-ecosystem",
-              order: "market_cap_desc",
-              per_page: 100, // Limit to 100 tokens per page
-              page: 1, // Change this to fetch additional pages if needed
-              sparkline: false,
-            },
-          }
+        const provider = new ethers.JsonRpcProvider(
+          "https://eth-mainnet.g.alchemy.com/v2/lBsnumlNVsOQUAoLYFwEFlnLkqYmkISK"
         );
 
-        setTokens(response.data);
-        setLoading(false);
+        const factoryAddress = "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f";
+        const factoryAbi = [
+          "function allPairsLength() view returns (uint256)",
+          "function allPairs(uint256) view returns (address)",
+        ];
+        const pairAbi = [
+          "function token0() view returns (address)",
+          "function token1() view returns (address)",
+        ];
+
+        const factoryContract = new ethers.Contract(
+          factoryAddress,
+          factoryAbi,
+          provider
+        );
+
+        const totalPairs = await factoryContract.allPairsLength();
+        const pairsToFetch = 10n;
+
+        const recentTokens: TokenType[] = []; // Specify the type here
+        const fetchTokenData = async (address: string): Promise<TokenType> => {
+          const tokenAbi = [
+            "function name() view returns (string)",
+            "function symbol() view returns (string)",
+            "function decimals() view returns (uint8)",
+          ];
+          const tokenContract = new ethers.Contract(
+            address,
+            tokenAbi,
+            provider
+          );
+
+          const [name, symbol, decimals] = await Promise.all([
+            tokenContract.name(),
+            tokenContract.symbol(),
+            tokenContract.decimals(),
+          ]);
+
+          return { address, name, symbol, decimals };
+        };
+
+        for (let i = totalPairs - pairsToFetch; i < totalPairs; i++) {
+          const pairAddress = await factoryContract.allPairs(i);
+          const pairContract = new ethers.Contract(
+            pairAddress,
+            pairAbi,
+            provider
+          );
+
+          const [token0Address, token1Address] = await Promise.all([
+            pairContract.token0(),
+            pairContract.token1(),
+          ]);
+
+          const [token0, token1] = await Promise.all([
+            fetchTokenData(token0Address),
+            fetchTokenData(token1Address),
+          ]);
+
+          recentTokens.push(token0, token1);
+        }
+
+        setTokens(recentTokens); // Now works correctly
       } catch (error) {
         console.error("Error fetching token data:", error);
+      } finally {
         setLoading(false);
       }
     };
@@ -53,13 +108,7 @@ export function Dashboard() {
 
   return (
     <Box w="100%" px={{ base: 8, md: 20 }} mt={100} mb={20}>
-      <Flex
-        align="center"
-        justify="center"
-        px={4}
-        textAlign="center"
-        flexDirection="column"
-      >
+      <Flex align="center" justify="center" flexDirection="column">
         <TableContainer>
           <Table>
             <Thead>
@@ -67,45 +116,19 @@ export function Dashboard() {
                 <Th>No</Th>
                 <Th>Token</Th>
                 <Th>Symbol</Th>
-                <Th>Price (USD)</Th>
-                <Th>24h Change (%)</Th>
-                <Th>Volume (24h)</Th>
-                <Th>Market Cap</Th>
+                <Th>Address</Th>
               </Tr>
             </Thead>
             {loading ? (
               <LoadingSpinner />
             ) : (
               <Tbody>
-                {tokens.map((token: any, index) => (
-                  <Tr key={token.id}>
+                {tokens.map((token, index) => (
+                  <Tr key={token.address}>
                     <Td>{index + 1}</Td>
-                    <Td>
-                      <Flex align="center">
-                        <Image
-                          src={token.image}
-                          alt={token.name}
-                          boxSize="32px" // Sets a consistent image size
-                          borderRadius="full"
-                          mr={2} // Adds space between the image and text
-                          fallbackSrc="https://via.placeholder.com/32" // Placeholder if the image fails to load
-                        />
-                        <Text fontWeight="medium">{token.name}</Text>
-                      </Flex>
-                    </Td>
-                    <Td>{token.symbol.toUpperCase()}</Td>
-                    <Td>${token.current_price.toFixed(2)}</Td>
-                    <Td
-                      color={
-                        token.price_change_percentage_24h < 0
-                          ? "red.500"
-                          : "green.500"
-                      }
-                    >
-                      {token.price_change_percentage_24h?.toFixed(2)}%
-                    </Td>
-                    <Td>${token.total_volume.toLocaleString()}</Td>
-                    <Td>${token.market_cap.toLocaleString()}</Td>
+                    <Td>{token.name || "Unknown"}</Td>
+                    <Td>{token.symbol || "N/A"}</Td>
+                    <Td>{token.address}</Td>
                   </Tr>
                 ))}
               </Tbody>
